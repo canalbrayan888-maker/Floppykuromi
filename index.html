@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Kuromi Flappy</title>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;700;900&display=swap');
+
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+}
+
+html,body{
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  background:#1a0a2e;
+  font-family:'Nunito',sans-serif;
+}
+
+canvas{
+  border-radius:20px;
+  box-shadow:0 0 60px rgba(255,182,255,0.4);
+}
+
+#gameWrapper{
+  position:relative;
+}
+
+#score{
+  position:absolute;
+  top:15px;
+  left:50%;
+  transform:translateX(-50%);
+  color:white;
+  font-size:42px;
+  font-family:'Fredoka One',cursive;
+  z-index:10;
+}
+
+#overlay{
+  position:absolute;
+  inset:0;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  background:rgba(0,0,0,0.6);
+  border-radius:20px;
+  z-index:20;
+}
+
+#overlay.hidden{
+  display:none;
+}
+
+h1{
+  color:#ffb3f0;
+  font-size:50px;
+  text-align:center;
+  font-family:'Fredoka One',cursive;
+}
+
+button{
+  margin-top:20px;
+  padding:14px 40px;
+  border:none;
+  border-radius:50px;
+  font-size:22px;
+  cursor:pointer;
+  background:#ff44bb;
+  color:white;
+  font-family:'Fredoka One',cursive;
+}
+</style>
+</head>
+
+<body>
+
+<div id="gameWrapper">
+
+  <div id="score">0</div>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <div id="overlay">
+    <h1>Kuromi<br>Flappy</h1>
+    <button id="playBtn">JUGAR</button>
+  </div>
+
+</div>
+
+<script>
+
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+const overlay = document.getElementById("overlay");
+const playBtn = document.getElementById("playBtn");
+const scoreDisplay = document.getElementById("score");
+
+const W = 400;
+const H = 700;
+
+canvas.width = W;
+canvas.height = H;
+
+const kuromiImg = new Image();
+kuromiImg.src = "1000198251.png";
+
+let state = "menu";
+
+let score = 0;
+
+let ky = H/2;
+let kvy = 0;
+
+const NORMAL_GRAVITY = 0.20;
+const START_GRAVITY = 0.04;
+
+let currentGravity = START_GRAVITY;
+
+const JUMP = -5.6;
+
+const PIPE_W = 60;
+
+const BASE_PIPE_GAP = 230;
+const MIN_PIPE_GAP = 145;
+
+const BASE_PIPE_SPEED = 1.8;
+const MAX_PIPE_SPEED = 4.2;
+
+const PIPE_INTERVAL = 120;
+
+let pipes = [];
+let pipeTimer = 0;
+
+let startTime = 0;
+
+function resetGame(){
+
+  score = 0;
+
+  ky = H/2;
+  kvy = 0;
+
+  pipes = [];
+  pipeTimer = 0;
+
+  scoreDisplay.innerText = "0";
+
+}
+
+function startGame(){
+
+  resetGame();
+
+  overlay.classList.add("hidden");
+
+  state = "playing";
+
+  startTime = Date.now();
+
+  currentGravity = START_GRAVITY;
+
+  setTimeout(()=>{
+    currentGravity = NORMAL_GRAVITY;
+  },2000);
+
+}
+
+playBtn.onclick = startGame;
+
+function jump(){
+
+  if(state !== "playing") return;
+
+  kvy = JUMP;
+
+}
+
+window.addEventListener("keydown",(e)=>{
+  if(e.code === "Space"){
+    jump();
+  }
+});
+
+window.addEventListener("click",jump);
+window.addEventListener("touchstart",jump);
+
+function update(){
+
+  if(state !== "playing") return;
+
+  const elapsedTime =
+    (Date.now() - startTime) / 1000;
+
+  kvy += currentGravity;
+  ky += kvy;
+
+  pipeTimer++;
+
+  const difficulty =
+    Math.min(elapsedTime / 45, 1);
+
+  const currentPipeGap =
+    BASE_PIPE_GAP -
+    ((BASE_PIPE_GAP - MIN_PIPE_GAP)
+    * difficulty);
+
+  const currentPipeSpeed =
+    BASE_PIPE_SPEED +
+    ((MAX_PIPE_SPEED - BASE_PIPE_SPEED)
+    * difficulty);
+
+  if(pipeTimer >= PIPE_INTERVAL){
+
+    pipeTimer = 0;
+
+    const minT = 60;
+    const maxT =
+      H - currentPipeGap - 60;
+
+    pipes.push({
+      x: W,
+      topH:
+        minT +
+        Math.random() *
+        (maxT - minT),
+      scored:false,
+      gap:currentPipeGap
+    });
+
+  }
+
+  pipes.forEach(p=>{
+    p.x -= currentPipeSpeed;
+
+    if(!p.scored && p.x + PIPE_W < 120){
+
+      p.scored = true;
+
+      score++;
+
+      scoreDisplay.innerText = score;
+
+    }
+
+  });
+
+  pipes = pipes.filter(p=>p.x > -PIPE_W);
+
+  if(checkCollision()){
+
+    state = "gameover";
+
+    overlay.classList.remove("hidden");
+
+  }
+
+}
+
+function checkCollision(){
+
+  const hitR = 30;
+
+  const cx = 120;
+  const cy = ky;
+
+  if(cy < 0 || cy > H){
+    return true;
+  }
+
+  for(let p of pipes){
+
+    if(
+      cx + hitR > p.x &&
+      cx - hitR < p.x + PIPE_W
+    ){
+
+      if(
+        cy - hitR < p.topH ||
+        cy + hitR >
+        p.topH + (p.gap || 190)
+      ){
+        return true;
+      }
+
+    }
+
+  }
+
+  return false;
+
+}
+
+function drawBackground(){
+
+  const grad =
+    ctx.createLinearGradient(
+      0,0,0,H
+    );
+
+  grad.addColorStop(0,"#34104d");
+  grad.addColorStop(1,"#12041f");
+
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,W,H);
+
+}
+
+function drawPipes(){
+
+  pipes.forEach(p=>{
+
+    ctx.fillStyle = "#8a2be2";
+
+    // tubo arriba
+    ctx.fillRect(
+      p.x,
+      0,
+      PIPE_W,
+      p.topH
+    );
+
+    // tubo abajo
+    ctx.fillRect(
+      p.x,
+      p.topH + (p.gap || 190),
+      PIPE_W,
+      H
+    );
+
+  });
+
+}
+
+function drawKuromi(){
+
+  ctx.save();
+
+  ctx.translate(120,ky);
+
+  ctx.rotate(kvy * 0.05);
+
+  ctx.drawImage(
+    kuromiImg,
+    -35,
+    -35,
+    70,
+    70
+  );
+
+  ctx.restore();
+
+}
+
+function draw(){
+
+  drawBackground();
+
+  drawPipes();
+
+  drawKuromi();
+
+}
+
+function loop(){
+
+  update();
+
+  draw();
+
+  requestAnimationFrame(loop);
+
+}
+
+loop();
+
+</script>
+
+</body>
+</html>
